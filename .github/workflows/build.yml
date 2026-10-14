@@ -32,7 +32,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CUSTOM=SharedLibs/native/arm64-v8a/libmonosgen-2.0.so
+          ROOT=$(find . -type f -name SMAPIGameLoader.csproj -not -path "*/obj/*" -print -quit | xargs -r dirname)
+          if [ -z "$ROOT" ]; then echo "SMAPIGameLoader.csproj not found. Upload extracted source files, not only the ZIP." >&2; exit 1; fi
+          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
+          CUSTOM="$(dirname "$ROOT")/SharedLibs/native/arm64-v8a/libmonosgen-2.0.so"
           if [ -f "$CUSTOM" ]; then
             RUNTIME=$(find "$HOME/.dotnet/packs" "/usr/share/dotnet/packs" -path '*/Microsoft.NETCore.App.Runtime.Mono.android-arm64/*/runtimes/android-arm64/native/libmonosgen-2.0.so' -print -quit 2>/dev/null || true)
             if [ -z "$RUNTIME" ]; then
@@ -45,11 +48,11 @@ jobs:
           fi
 
       - name: Publish APK
-        run: dotnet publish SMAPIGameLoader/SMAPIGameLoader.csproj -f net9.0-android -c Release -p:AndroidPackageFormat=apk
+        run: dotnet publish "$PROJECT_ROOT/SMAPIGameLoader.csproj" -f net9.0-android -c Release -p:AndroidPackageFormat=apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SMAPILoader-Android
-          path: SMAPIGameLoader/bin/Release/**/*.apk
+          path: "**/SMAPIGameLoader/bin/Release/**/*.apk"
           if-no-files-found: error
