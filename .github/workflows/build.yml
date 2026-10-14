@@ -1,0 +1,55 @@
+name: Build SMAPILoader APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install Android workload
+        run: dotnet workload install android
+
+      - name: Apply custom Mono runtime if available
+        shell: bash
+        run: |
+          set -euo pipefail
+          CUSTOM=SharedLibs/native/arm64-v8a/libmonosgen-2.0.so
+          if [ -f "$CUSTOM" ]; then
+            RUNTIME=$(find "$HOME/.dotnet/packs" "/usr/share/dotnet/packs" -path '*/Microsoft.NETCore.App.Runtime.Mono.android-arm64/*/runtimes/android-arm64/native/libmonosgen-2.0.so' -print -quit 2>/dev/null || true)
+            if [ -z "$RUNTIME" ]; then
+              echo 'Custom Mono runtime target not found' >&2
+              exit 1
+            fi
+            sudo cp "$CUSTOM" "$RUNTIME"
+          else
+            echo 'WARNING: custom Mono runtime not present; resulting APK may not run SMAPI correctly.'
+          fi
+
+      - name: Publish APK
+        run: dotnet publish SMAPIGameLoader/SMAPIGameLoader.csproj -f net9.0-android -c Release -p:AndroidPackageFormat=apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMAPILoader-Android
+          path: SMAPIGameLoader/bin/Release/**/*.apk
+          if-no-files-found: error
