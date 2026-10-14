@@ -47,6 +47,27 @@ jobs:
             echo 'WARNING: custom Mono runtime not present; resulting APK may not run SMAPI correctly.'
           fi
 
+      - name: Prepare game DLL dependencies
+        shell: bash
+        env:
+          GAME_DLLS_URL: ${{ secrets.GAME_DLLS_URL }}
+        run: |
+          set -euo pipefail
+          DEST="$(dirname "$PROJECT_ROOT")/../SMAPI-Android-1.6/src/DependenciesDll"
+          mkdir -p "$DEST"
+          if [ -n "$GAME_DLLS_URL" ]; then
+            curl --fail --location --retry 3 --output /tmp/game-dlls.zip "$GAME_DLLS_URL"
+            unzip -j -o /tmp/game-dlls.zip 'MonoGame.Framework.dll' 'StardewValley.dll' 'StardewValley.GameData.dll' -d "$DEST"
+          fi
+          missing=0
+          for dll in MonoGame.Framework.dll StardewValley.dll StardewValley.GameData.dll; do
+            if [ ! -s "$DEST/$dll" ]; then
+              echo "::error::Missing $dll. Extract your legally owned Android game DLLs and provide a private ZIP using the GAME_DLLS_URL repository secret."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+
       - name: Publish APK
         run: dotnet publish "$PROJECT_ROOT/SMAPIGameLoader.csproj" -f net9.0-android -c Release -p:AndroidPackageFormat=apk
 
